@@ -1,6 +1,10 @@
 .room-designer {
   max-width: 800px;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: Arial, sans-serif;
 }
 
 .room-controls {
@@ -20,11 +24,21 @@ input[type="number"] {
   margin-left: 5px;
 }
 
-.room-preview {
-  border: 2px solid #333;
-  margin: 0 auto;
+.room-preview-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: hidden;
   position: relative;
-  transition: all 0.3s ease;
+}
+
+.room-preview {
+  width: 100%;
+  height: auto;
+  position: relative;
+  border: 1px solid #ccc;
   background-color: #f5f5f5;
   display: flex;
   flex-direction: column;
@@ -35,4 +49,291 @@ input[type="number"] {
 .room-dimensions {
   font-size: 0.9rem;
   color: #555;
+}
+
+.settings {
+  margin-bottom: 20px;
+}
+
+.settings label {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.room {
+  position: relative;
+  background-color: #f0f0f0;
+  border: 1px solid #ccc;
+  margin-bottom: 20px;
+}
+
+.bed {
+  position: relative;
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid #0056b3;
+  font-size: 0.8rem;
+  cursor: grab;
+  font-weight: bold;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  background-image: linear-gradient(to bottom, #1e90ff, #007bff);
+}
+
+.bed::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to right, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.1) 50%, transparent 51%, transparent 100%);
+  background-size: 20px 100%;
+}
+
+.room-display-container {
+  width: 500px;
+  height: auto;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #ccc;
+  background-color: #fff;
+  margin: 0 auto;
+}
+
+.headboard-control {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+}
+
+.headboard-control input[type="number"] {
+  width: 50px;
+  margin-left: 5px;
+  margin-top: 5px;
+}
+
+.bed-container {
+  cursor: grab;
+  box-sizing: border-box;
+  will-change: transform;
+  transform-origin: center center;
+}
+
+.bed-container.rotating {
+  cursor: not-allowed;
+  transition: none;
+}
+
+@keyframes rotateClockwise {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(90deg); }
+}
+
+@keyframes rotateCounterClockwise {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-90deg); }
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+
+.bed.rotating {
+  animation: pulse 0.3s ease-in-out;
+}
+
+.headboard.rotating {
+  animation: pulse 0.3s ease-in-out;
+}
+
+.headboard {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #f8f1e9;
+  font-size: 0.7rem;
+  position: relative;
+  background-color: #8B4513 !important;
+  min-height: 15px;
+  min-width: 15px;
+  z-index: 5;
+}
+
+.headboard::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 10px,
+    rgba(139, 69, 19, 0.8) 10px,
+    rgba(139, 69, 19, 0.8) 12px
+  );
+  opacity: 0.3;
+}
+
+.headboard-label {
+  transform: rotate(0deg);
+  font-size: 0.7rem;
+  z-index: 2;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+  font-weight: bold;
+  display: inline-block;
+}
+
+.rotation-controls {
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+  margin-top: 8px;
+}
+
+.rotate-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.8);
+  border: 1px solid #0056b3;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 20px;
+  font-weight: bold;
+  color: #0056b3;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  transition: all 0.2s;
+  padding: 0;
+  line-height: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.rotate-btn:hover {
+  background-color: #e6f2ff;
+  transform: scale(1.1);
+}
+
+.rotate-btn:active {
+  background-color: #cce5ff;
+  transform: scale(0.95);
+}
+
+.rotate-btn:after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(0);
+  border-radius: 50%;
+  transition: transform 0.3s;
+}
+
+.rotate-btn:active:after {
+  transform: scale(2);
+  opacity: 0;
+  transition: transform 0.3s, opacity 0.3s;
+}
+
+@keyframes rotateButtonClockwise {
+  0% { transform: rotate(0); }
+  100% { transform: rotate(90deg); }
+}
+
+@keyframes rotateButtonCounterClockwise {
+  0% { transform: rotate(0); }
+  100% { transform: rotate(-90deg); }
+}
+
+.rotate-btn.rotate-clockwise:active {
+  animation: rotateButtonClockwise 0.3s ease;
+}
+
+.rotate-btn.rotate-counterclockwise:active {
+  animation: rotateButtonCounterClockwise 0.3s ease;
+}
+
+.bed-text {
+  position: relative;
+  z-index: 2;
+  font-weight: bold;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+  display: inline-block; /* Important for proper rotation */
+  margin-bottom: 5px;
+  text-align: center;
+}
+
+.bed-content {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center center;
+  gap: 8px;
+  will-change: transform;
+}
+
+.headboard-rotated .headboard-label {
+  transform: rotate(0deg); /* Will be dynamically set in the component */
+}
+
+.headboard-rotated {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #f8f1e9;
+  font-size: 0.7rem;
+}
+
+.headboard-side {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  min-width: 15px;
+}
+
+.headboard-side .headboard-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  text-orientation: mixed;
+}
+
+.east-orientation,
+.west-orientation,
+.north-orientation,
+.south-orientation {
+  display: flex !important;
+  width: 100% !important;
+  height: 100% !important;
+  position: relative;
+}
+
+.east-orientation {
+  flex-direction: row !important;
+}
+
+.west-orientation {
+  flex-direction: row !important;
+}
+
+.north-orientation {
+  flex-direction: column !important;
+}
+
+.south-orientation {
+  flex-direction: column !important;
 }
