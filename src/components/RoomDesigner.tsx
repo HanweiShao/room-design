@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './RoomDesigner.css';
 
 interface Dimensions {
@@ -32,6 +32,12 @@ const RoomDesigner: React.FC = () => {
   const [headboardPosition, setHeadboardPosition] = useState<HeadboardPosition>('top');
   const [isRotating, setIsRotating] = useState<boolean>(false);
   const [animationRotation, setAnimationRotation] = useState<number>(0);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [dragPreviewPosition, setDragPreviewPosition] = useState<Position | null>(null);
+  const [dragOffsetRef, setDragOffsetRef] = useState<{ x: number, y: number }>({ x: 0, y: 0 });
+  const [touchStartPos, setTouchStartPos] = useState<{ x: number, y: number } | null>(null);
+  const roomPreviewRef = useRef<HTMLDivElement>(null);
+  const bedRef = useRef<HTMLDivElement>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -63,36 +69,195 @@ const RoomDesigner: React.FC = () => {
     }
   };
 
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
-    const bedRect = e.currentTarget.getBoundingClientRect();
-    e.dataTransfer.setData('dragStartX', (e.clientX - bedRect.left).toString());
-    e.dataTransfer.setData('dragStartY', (e.clientY - bedRect.top).toString());
-  };
+  // Unified calculation function that works for both mouse and touch events
+  const calculatePosition = React.useCallback((clientX: number, clientY: number, offsetX: number, offsetY: number): Position | null => {
+    const roomPreview = roomPreviewRef.current;
+    if (!roomPreview) return null;
 
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const dragStartX = parseInt(e.dataTransfer.getData('dragStartX'), 10);
-    const dragStartY = parseInt(e.dataTransfer.getData('dragStartY'), 10);
+    const roomRect = roomPreview.getBoundingClientRect();
 
-    const roomRect = e.currentTarget.getBoundingClientRect();
-    const dropX = e.clientX - roomRect.left - dragStartX;
-    const dropY = e.clientY - roomRect.top - dragStartY;
+    // Calculate the position in pixels, adjusting for the offset
+    const positionPixelX = clientX - roomRect.left - offsetX;
+    const positionPixelY = clientY - roomRect.top - offsetY;
 
+    // Calculate scale conversion between pixels and centimeters
+    const scaleX = roomDimensions.width / roomRect.width;
+    const scaleY = roomDimensions.length / roomRect.height;
+
+    // Convert from pixels to centimeters in room coordinates
+    const positionCmX = positionPixelX * scaleX;
+    const positionCmY = positionPixelY * scaleY;
+
+    // Apply constraints based on bed orientation and headboard
     const isVertical = headboardPosition === 'top' || headboardPosition === 'bottom';
     const actualWidth = isVertical ? bedSize.width : bedSize.length;
     const actualLength = isVertical ? bedSize.length : bedSize.width;
     const headboardAtStart = headboardPosition === 'top' || headboardPosition === 'left';
     const totalLength = showHeadboard && headboardAtStart ? actualLength + headboardSize : actualLength;
 
-    setBedPosition({
-      left: Math.max(0, Math.min(dropX, roomDimensions.width - actualWidth)),
-      top: Math.max(0, Math.min(dropY, roomDimensions.length - totalLength))
-    });
+    // Ensure the bed stays within the room boundaries
+    const clampedX = Math.max(0, Math.min(positionCmX, roomDimensions.width - actualWidth));
+    const clampedY = Math.max(0, Math.min(positionCmY, roomDimensions.length - totalLength));
+
+    return {
+      left: clampedX,
+      top: clampedY
+    };
+  }, [roomDimensions, bedSize, headboardPosition, showHeadboard, headboardSize]);
+
+  // Updated drag handlers to use unified calculation function
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
+    const bedRect = e.currentTarget.getBoundingClientRect();
+
+    // Calculate the offset from the mouse position to the top-left corner of the bed
+    const offsetX = e.clientX - bedRect.left;
+    const offsetY = e.clientY - bedRect.top;
+
+    // Store offset in both data transfer and component state for reliability
+    e.dataTransfer.setData('offsetX', offsetX.toString());
+    e.dataTransfer.setData('offsetY', offsetY.toString());
+    setDragOffsetRef({ x: offsetX, y: offsetY });
+
+    setIsDragging(true);
+
+    // Set a custom drag image if needed (optional)
+    const dragImage = new Image();
+    dragImage.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'; // Transparent 1x1 pixel
+    e.dataTransfer.setDragImage(dragImage, 0, 0);
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+    setDragPreviewPosition(null);
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+
+    // Get offsets from state since dataTransfer can't be accessed during dragOver in some browsers
+    const { x: offsetX, y: offsetY } = dragOffsetRef;
+
+    // Calculate new position
+    const newPosition = calculatePosition(e.clientX, e.clientY, offsetX, offsetY);
+    if (newPosition) {
+      setDragPreviewPosition(newPosition);
+    }
   };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+
+    // Try to get from dataTransfer first, fallback to state
+    let offsetX, offsetY;
+    try {
+      offsetX = parseInt(e.dataTransfer.getData('offsetX'), 10);
+      offsetY = parseInt(e.dataTransfer.getData('offsetY'), 10);
+    } catch (error) {
+      // Fallback to the stored ref if dataTransfer fails
+      offsetX = dragOffsetRef.x;
+      offsetY = dragOffsetRef.y;
+    }
+
+    // Ensure we have valid offsets
+    if (isNaN(offsetX) || isNaN(offsetY)) {
+      offsetX = dragOffsetRef.x;
+      offsetY = dragOffsetRef.y;
+    }
+
+    // Calculate final position
+    const newPosition = calculatePosition(e.clientX, e.clientY, offsetX, offsetY);
+    if (newPosition) {
+      setBedPosition(newPosition);
+    }
+
+    // Clean up
+    setIsDragging(false);
+    setDragPreviewPosition(null);
+  };
+
+  // Touch handlers using the same unified calculation
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (isRotating) return;
+
+    const touch = e.touches[0];
+    const bedRect = e.currentTarget.getBoundingClientRect();
+
+    // Calculate offset from touch position to bed's top-left corner
+    const offsetX = touch.clientX - bedRect.left;
+    const offsetY = touch.clientY - bedRect.top;
+
+    // Store the offset for use during move
+    setDragOffsetRef({ x: offsetX, y: offsetY });
+    setTouchStartPos({ x: touch.clientX, y: touch.clientY });
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    // We don't call preventDefault here anymore
+    // The actual prevention happens in the useEffect's non-passive event listener
+    if (!isDragging || !touchStartPos || isRotating) return;
+
+    const touch = e.touches[0];
+    const { x: offsetX, y: offsetY } = dragOffsetRef;
+
+    // Use the same calculation function as for mouse events
+    const newPosition = calculatePosition(touch.clientX, touch.clientY, offsetX, offsetY);
+    if (newPosition) {
+      setDragPreviewPosition(newPosition);
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!isDragging || !touchStartPos) return;
+
+    if (e.changedTouches.length > 0) {
+      const touch = e.changedTouches[0];
+      const { x: offsetX, y: offsetY } = dragOffsetRef;
+
+      // Use the same calculation function for the final position
+      const newPosition = calculatePosition(touch.clientX, touch.clientY, offsetX, offsetY);
+      if (newPosition) {
+        setBedPosition(newPosition);
+      }
+    }
+
+    setIsDragging(false);
+    setTouchStartPos(null);
+    setDragPreviewPosition(null);
+  };
+
+  // Non-passive touch event handler in useEffect
+  useEffect(() => {
+    const bedElement = bedRef.current;
+    if (!bedElement) return;
+
+    // Options for the event listeners - non-passive to allow preventDefault
+    const options = { passive: false };
+
+    // Function to handle touch move with non-passive option
+    const touchMoveHandler = (e: TouchEvent) => {
+      if (!isDragging || !touchStartPos || isRotating) return;
+      e.preventDefault(); // Prevent scrolling
+
+      if (e.touches.length > 0) {
+        const touch = e.touches[0];
+        const { x: offsetX, y: offsetY } = dragOffsetRef;
+
+        // Use the same calculation function
+        const newPosition = calculatePosition(touch.clientX, touch.clientY, offsetX, offsetY);
+        if (newPosition) {
+          setDragPreviewPosition(newPosition);
+        }
+      }
+    };
+
+    bedElement.addEventListener('touchmove', touchMoveHandler, options);
+
+    return () => {
+      bedElement.removeEventListener('touchmove', touchMoveHandler);
+    };
+  }, [isDragging, touchStartPos, isRotating, calculatePosition, dragOffsetRef]);
 
   const getNextHeadboardPosition = (current: HeadboardPosition, direction: 'clockwise' | 'counterclockwise'): HeadboardPosition => {
     const positions: HeadboardPosition[] = ['top', 'right', 'bottom', 'left'];
@@ -120,7 +285,6 @@ const RoomDesigner: React.FC = () => {
     setIsRotating(true); // Set this first to prevent any race conditions
 
     const newHeadboardPosition = getNextHeadboardPosition(headboardPosition, direction);
-    console.log(`Rotating from ${headboardPosition} to ${newHeadboardPosition}`);
 
     const startAngle = headboardPositionToAngle(headboardPosition);
     setAnimationRotation(startAngle);
@@ -136,8 +300,8 @@ const RoomDesigner: React.FC = () => {
 
     let currentTotalLength = currentLength;
     if (showHeadboard) {
-      if ((isCurrentVertical && isHeadboardAtStartOfLayout) || 
-          (!isCurrentVertical && isHeadboardAffectingLength)) {
+      if ((isCurrentVertical && isHeadboardAtStartOfLayout) ||
+        (!isCurrentVertical && isHeadboardAffectingLength)) {
         currentTotalLength += headboardSize;
       }
     }
@@ -153,8 +317,8 @@ const RoomDesigner: React.FC = () => {
 
     let newTotalLength = newLength;
     if (showHeadboard) {
-      if ((isNewVertical && willHeadboardBeAtStart) || 
-          (!isNewVertical && willHeadboardAffectLength)) {
+      if ((isNewVertical && willHeadboardBeAtStart) ||
+        (!isNewVertical && willHeadboardAffectLength)) {
         newTotalLength += headboardSize;
       }
     }
@@ -177,11 +341,9 @@ const RoomDesigner: React.FC = () => {
       if (progress < 1) {
         requestAnimationFrame(animate);
       } else {
-        console.log(`Animation complete, setting headboard position to: ${newHeadboardPosition}`);
         setHeadboardPosition(newHeadboardPosition);
         setBedPosition({ left: adjustedLeft, top: adjustedTop });
         setTimeout(() => {
-          console.log("Animation finished, headboard should now be at:", newHeadboardPosition);
           setIsRotating(false);
         }, 100);
       }
@@ -226,6 +388,46 @@ const RoomDesigner: React.FC = () => {
       transform,
       transformOrigin: 'center center',
       display: 'block',
+      cursor: isDragging ? 'grabbing' : 'grab',
+      opacity: isDragging ? 0.4 : 1, // Make the original bed more transparent during drag
+    };
+  };
+
+  // Get style for the drag preview element
+  const getDragPreviewStyle = () => {
+    if (!dragPreviewPosition) return { display: 'none' };
+
+    const isVertical = headboardPosition === 'top' || headboardPosition === 'bottom';
+    const width = isVertical ? bedSize.width : bedSize.length;
+    const length = isVertical ? bedSize.length : bedSize.width;
+
+    const headboardAtEnd = headboardPosition === 'bottom' || headboardPosition === 'right';
+    const headboardAtStart = headboardPosition === 'top' || headboardPosition === 'left';
+
+    let totalLength = length;
+    if (showHeadboard) {
+      if (headboardAtStart || headboardAtEnd) {
+        totalLength += headboardSize;
+      }
+    }
+
+    const transform = isRotating ? `rotate(${animationRotation - headboardPositionToAngle(headboardPosition)}deg)` : '';
+
+    return {
+      width: `${(width / roomDimensions.width) * 100}%`,
+      height: `${(totalLength / roomDimensions.length) * 100}%`,
+      top: `${(dragPreviewPosition.top / roomDimensions.length) * 100}%`,
+      left: `${(dragPreviewPosition.left / roomDimensions.width) * 100}%`,
+      position: 'absolute' as const,
+      transformOrigin: 'center center',
+      display: 'block',
+      opacity: 0.7,
+      backgroundColor: 'rgba(30, 144, 255, 0.3)',
+      border: '2px dashed #0056b3',
+      boxSizing: 'border-box',
+      zIndex: 100,
+      transform,
+      pointerEvents: 'none',
     };
   };
 
@@ -233,10 +435,8 @@ const RoomDesigner: React.FC = () => {
     const animationClass = isRotating ? 'rotating' : '';
     const contentRotation = isRotating ? -(animationRotation - headboardPositionToAngle(headboardPosition)) : 0;
 
-    console.log(`Rendering with headboard position: ${headboardPosition}`);
-
     let orientationClass = '';
-    switch(headboardPosition) {
+    switch (headboardPosition) {
       case 'top': orientationClass = 'north-orientation'; break;
       case 'right': orientationClass = 'east-orientation'; break;
       case 'bottom': orientationClass = 'south-orientation'; break;
@@ -339,7 +539,7 @@ const RoomDesigner: React.FC = () => {
   };
 
   const getBedDisplayName = () => {
-    switch(bedSizeId) {
+    switch (bedSizeId) {
       case 'single': return 'Single Bed';
       case 'double': return 'Double Bed';
       case 'queen': return 'Queen Bed';
@@ -417,7 +617,7 @@ const RoomDesigner: React.FC = () => {
               />
               <label htmlFor="headboard-toggle">Show Headboard</label>
             </div>
-            
+
             {showHeadboard && (
               <div className="headboard-size-control">
                 <label>Headboard Size (cm):
@@ -442,16 +642,34 @@ const RoomDesigner: React.FC = () => {
       >
         <div className="room-display-container">
           <div
+            ref={roomPreviewRef}
             className="room-preview"
             style={{
               aspectRatio: `${roomDimensions.width} / ${roomDimensions.length}`
             }}
           >
             <p>Room Preview</p>
+            {/* The drag preview element */}
+            {isDragging && dragPreviewPosition && (
+              <div
+                className="bed-drag-preview"
+                style={getDragPreviewStyle()}
+              >
+                <div className="drag-preview-content">
+                  <div className="drag-preview-text">{getBedDisplayName()}</div>
+                </div>
+              </div>
+            )}
             <div
-              className={`bed-container ${isRotating ? 'rotating' : ''}`}
+              ref={bedRef}
+              className={`bed-container ${isRotating ? 'rotating' : ''} ${isDragging ? 'dragging' : ''}`}
               draggable={!isRotating}
               onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onTouchCancel={handleTouchEnd}
               style={getBedContainerStyle()}
             >
               {renderBed()}

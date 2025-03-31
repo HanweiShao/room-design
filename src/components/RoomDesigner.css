@@ -119,11 +119,91 @@ input[type="number"] {
   box-sizing: border-box;
   will-change: transform;
   transform-origin: center center;
+  transition: opacity 0.2s;
+  touch-action: none; /* Prevents browser handling of touch gestures */
+}
+
+.bed-container.dragging {
+  cursor: grabbing !important;
+  opacity: 0.4;
+  transition: none;
 }
 
 .bed-container.rotating {
   cursor: not-allowed;
   transition: none;
+}
+
+.bed-drag-preview {
+  pointer-events: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 0 10px rgba(0,0,0,0.3);
+  border-radius: 3px;
+  overflow: hidden;
+  will-change: transform;
+}
+
+.preview-bed {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 123, 255, 0.5);
+}
+
+.drag-preview-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  height: 100%;
+  width: 100%;
+  position: relative;
+}
+
+.drag-preview-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-weight: bold;
+  font-size: 0.8rem;
+  text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
+  white-space: nowrap;
+  color: white;
+  z-index: 101;
+}
+
+.preview-headboard {
+  opacity: 0.8;
+  z-index: 102;
+}
+
+.bed-drag-preview {
+  pointer-events: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 0 10px rgba(0,0,0,0.2);
+  border-radius: 4px;
+}
+
+.drag-preview-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  height: 100%;
+  width: 100%;
+}
+
+.drag-preview-text {
+  font-weight: bold;
+  font-size: 0.9rem;
+  text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
 }
 
 @keyframes rotateClockwise {
