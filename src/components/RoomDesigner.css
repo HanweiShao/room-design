@@ -79,6 +79,7 @@ input[type="number"] {
   font-weight: bold;
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
   background-image: linear-gradient(to bottom, #1e90ff, #007bff);
+  box-sizing: border-box;
 }
 
 .bed::after {
@@ -121,6 +122,10 @@ input[type="number"] {
   transform-origin: center center;
   transition: opacity 0.2s;
   touch-action: none; /* Prevents browser handling of touch gestures */
+  position: absolute;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .bed-container.dragging {
@@ -237,10 +242,11 @@ input[type="number"] {
   color: #f8f1e9;
   font-size: 0.7rem;
   position: relative;
-  background-color: #8B4513 !important;
+  background-color: #8B4513;
   min-height: 15px;
   min-width: 15px;
   z-index: 5;
+  box-sizing: border-box;
 }
 
 .headboard::after {
@@ -416,4 +422,61 @@ input[type="number"] {
 
 .south-orientation {
   flex-direction: column !important;
+}
+
+.furniture {
+  position: relative;
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid #666;
+  font-size: 0.8rem;
+  cursor: grab;
+  font-weight: bold;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  width: 100%;
+  height: 100%;
+}
+
+.furniture.bed {
+  border-color: #0056b3;
+  background-image: linear-gradient(to bottom, #1e90ff, #007bff);
+}
+
+.furniture.table {
+  border-color: #2c5530;
+  background-image: linear-gradient(to bottom, #4caf50, #388e3c);
+}
+
+.furniture.chair {
+  border-color: #7b1fa2;
+  background-image: linear-gradient(to bottom, #9c27b0, #7b1fa2);
+}
+
+.furniture.cabinet {
+  border-color: #c17900;
+  background-image: linear-gradient(to bottom, #ffa000, #ff8f00);
+}
+
+.furniture-content {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center center;
+  gap: 8px;
+  will-change: transform;
+}
+
+.furniture-text {
+  position: relative;
+  z-index: 2;
+  font-weight: bold;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+  display: inline-block;
+  margin-bottom: 5px;
+  text-align: center;
 }

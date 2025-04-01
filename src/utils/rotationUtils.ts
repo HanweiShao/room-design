@@ -1,4 +1,4 @@
-import { HeadboardPosition, headboardPositionToAngle, getNextHeadboardPosition, isVerticalOrientation, isHeadboardAtStart } from './headboardUtils';
+import { Orientation, OrientationHelper } from './orientationUtils';
 import { Dimensions } from './bedSizes';
 
 interface Position {
@@ -7,7 +7,7 @@ interface Position {
 }
 
 interface RotationCalculationResult {
-  newHeadboardPosition: HeadboardPosition;
+  newOrientation: Orientation;
   startAngle: number;
   rotationAmount: number;
   adjustedLeft: number;
@@ -28,37 +28,30 @@ interface RotationCalculationResult {
  */
 export const calculateRotation = (
   direction: 'clockwise' | 'counterclockwise',
-  headboardPosition: HeadboardPosition,
+  orientation: Orientation,
   bedSize: Dimensions,
   bedPosition: Position,
   roomDimensions: { width: number, length: number },
   showHeadboard: boolean,
   headboardSize: number
 ): RotationCalculationResult => {
-  // Calculate the next position after rotation
-  const newHeadboardPosition = getNextHeadboardPosition(headboardPosition, direction);
-
-  // Get the starting angle for the animation
-  const startAngle = headboardPositionToAngle(headboardPosition);
-  
-  // Determine rotation amount
+  const newOrientation = OrientationHelper.getNextOrientation(orientation, direction);
+  const startAngle = OrientationHelper.orientationToAngle(orientation);
   const rotationAmount = direction === 'clockwise' ? 90 : -90; // Degrees to rotate
-
-  // Check if current and new orientations are vertical (top/bottom) or horizontal (left/right)
-  const isCurrentVertical = isVerticalOrientation(headboardPosition);
-  const isNewVertical = isVerticalOrientation(newHeadboardPosition);
+  const isCurrentVertical = OrientationHelper.isVerticalOrientation(orientation);
+  const isNewVertical = OrientationHelper.isVerticalOrientation(newOrientation);
+  const isHeadboardAtStart = OrientationHelper.isOrientationAtStart(orientation);
 
   // Determine the current dimensions based on orientation
   const currentWidth = isCurrentVertical ? bedSize.width : bedSize.length;
   const currentLength = isCurrentVertical ? bedSize.length : bedSize.width;
 
   // Account for headboard in dimension calculations
-  const isHeadboardAffectingLength = showHeadboard && (headboardPosition === 'top' || headboardPosition === 'bottom');
-  const isHeadboardAtStartOfLayout = isHeadboardAtStart(headboardPosition);
+  const isHeadboardAffectingLength = showHeadboard && (orientation === 'top' || orientation === 'bottom');
 
   let currentTotalLength = currentLength;
   if (showHeadboard) {
-    if ((isCurrentVertical && isHeadboardAtStartOfLayout) ||
+    if ((isCurrentVertical && isHeadboardAtStart) ||
       (!isCurrentVertical && isHeadboardAffectingLength)) {
       currentTotalLength += headboardSize;
     }
@@ -73,8 +66,8 @@ export const calculateRotation = (
   const newLength = isNewVertical ? bedSize.length : bedSize.width;
 
   // Account for headboard in new dimensions
-  const willHeadboardAffectLength = showHeadboard && (newHeadboardPosition === 'top' || newHeadboardPosition === 'bottom');
-  const willHeadboardBeAtStart = isHeadboardAtStart(newHeadboardPosition);
+  const willHeadboardAffectLength = showHeadboard && (newOrientation === 'top' || newOrientation === 'bottom');
+  const willHeadboardBeAtStart = OrientationHelper.isOrientationAtStart(newOrientation);
 
   let newTotalLength = newLength;
   if (showHeadboard) {
@@ -89,7 +82,7 @@ export const calculateRotation = (
   const adjustedTop = Math.max(0, Math.min(centerY - (newTotalLength / 2), roomDimensions.length - newTotalLength));
 
   return {
-    newHeadboardPosition,
+    newOrientation,
     startAngle,
     rotationAmount,
     adjustedLeft,
@@ -120,13 +113,13 @@ export const createRotationAnimator = (
   duration = 300
 ) => {
   const startTime = performance.now();
-  
+
   // Animation frame callback that updates the rotation angle
   const animate = (timestamp: number) => {
     // Calculate animation progress (0 to 1)
     const elapsed = timestamp - startTime;
     const progress = Math.min(elapsed / duration, 1);
-    
+
     // Apply easing function for smooth acceleration/deceleration
     const easedProgress = 0.5 - Math.cos(progress * Math.PI) / 2;
 

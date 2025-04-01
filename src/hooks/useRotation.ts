@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { HeadboardPosition, headboardPositionToAngle } from '../utils/headboardUtils';
+import { Orientation } from '../utils/orientationUtils';
 import { Dimensions } from '../utils/bedSizes';
 import { calculateRotation, createRotationAnimator } from '../utils/rotationUtils';
 
@@ -9,18 +9,18 @@ interface Position {
 }
 
 interface UseRotationProps {
-  bedSize: Dimensions;
-  bedPosition: Position;
+  furnitureSize: Dimensions;
+  furniturePosition: Position;
   roomDimensions: Dimensions;
-  showHeadboard: boolean;
-  headboardSize: number;
+  hasHead?: boolean; // Whether the furniture has a "head" object (e.g., bedhead)
+  headSize?: number; // Size of the "head" object
   onPositionChange: (position: Position) => void;
-  onHeadboardPositionChange: (position: HeadboardPosition) => void;
+  onOrientationChange: (orientation: Orientation) => void;
 }
 
 /**
  * ROTATION SYSTEM OVERVIEW:
- * This hook encapsulates the bed rotation system which:
+ * This hook encapsulates the furniture rotation system which:
  * 1. Manages the rotation state (isRotating, animationRotation)
  * 2. Calculates position changes during rotation
  * 3. Animates the rotation with smooth transitions
@@ -33,16 +33,16 @@ interface UseRotationProps {
  * Instead of directly changing the CSS transform permanently, we:
  * - Control the smooth transition between rotation states
  * - Handle the content counter-rotation separately from the container
- * - Calculate and adjust the bed position appropriately after rotation
+ * - Calculate and adjust the furniture position appropriately after rotation
  */
 const useRotation = ({
-  bedSize,
-  bedPosition,
+  furnitureSize,
+  furniturePosition,
   roomDimensions,
-  showHeadboard,
-  headboardSize,
+  hasHead = false,
+  headSize = 0,
   onPositionChange,
-  onHeadboardPositionChange
+  onOrientationChange
 }: UseRotationProps) => {
   // Track if a rotation animation is currently in progress
   const [isRotating, setIsRotating] = useState<boolean>(false);
@@ -54,15 +54,15 @@ const useRotation = ({
    * Main rotation function that handles both the animation and logic of rotation
    * 
    * This function:
-   * 1. Calculates the next headboard position based on rotation direction
+   * 1. Calculates the next orientation based on rotation direction
    * 2. Determines how dimensions will change after rotation
-   * 3. Computes the new position to keep the bed centered after rotation
+   * 3. Computes the new position to keep the furniture centered after rotation
    * 4. Runs the smooth animation using requestAnimationFrame
    * 5. Updates the parent component when rotation is complete
    */
-  const rotateBed = useCallback((
+  const rotateFurniture = useCallback((
     direction: 'clockwise' | 'counterclockwise', 
-    currentHeadboardPosition: HeadboardPosition
+    currentOrientation: Orientation
   ) => {
     if (isRotating) return;
 
@@ -70,19 +70,19 @@ const useRotation = ({
 
     // Use the rotation utility to calculate all necessary values
     const {
-      newHeadboardPosition,
+      newOrientation,
       startAngle,
       rotationAmount,
       adjustedLeft,
       adjustedTop
     } = calculateRotation(
       direction,
-      currentHeadboardPosition,
-      bedSize,
-      bedPosition,
+      currentOrientation,
+      furnitureSize,
+      furniturePosition,
       roomDimensions,
-      showHeadboard,
-      headboardSize
+      hasHead,
+      headSize
     );
 
     // Set initial animation rotation angle
@@ -98,7 +98,7 @@ const useRotation = ({
       },
       // Complete callback - finalizes the rotation by updating position and orientation
       () => {
-        onHeadboardPositionChange(newHeadboardPosition);
+        onOrientationChange(newOrientation);
         onPositionChange({ left: adjustedLeft, top: adjustedTop });
         
         // Small delay before allowing another rotation to prevent rapid multiple rotations
@@ -112,19 +112,19 @@ const useRotation = ({
     requestAnimationFrame(animate);
   }, [
     isRotating, 
-    bedSize, 
-    bedPosition, 
+    furnitureSize, 
+    furniturePosition, 
     roomDimensions, 
-    showHeadboard, 
-    headboardSize, 
+    hasHead, 
+    headSize, 
     onPositionChange,
-    onHeadboardPositionChange
+    onOrientationChange
   ]);
 
   return {
     isRotating,
     animationRotation,
-    rotateBed
+    rotateFurniture
   };
 };
 

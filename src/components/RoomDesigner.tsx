@@ -1,18 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './RoomDesigner.css';
 import { Dimensions, getBedDisplayName, getBedSizeById, BED_SIZES } from '../utils/bedSizes';
-import { 
-  HeadboardPosition, 
-  headboardPositionToAngle,
-  isVerticalOrientation,
-  isHeadboardAtStart
-} from '../utils/headboardUtils';
+import {
+  Orientation,
+} from '../utils/orientationUtils';
+import { OrientationHelper } from '../utils/orientationUtils';
 import BedComponent from './BedComponent';
 import useRotation from '../hooks/useRotation';
+import { Position } from '../types/roomObjects';
 
-interface Position {
-  top: number;
-  left: number;
+enum FurnitureType {
+  Bed = 'bed',
+  Wardrobe = 'wardrobe',
+  Table = 'table',
+  Chair = 'chair',
 }
 
 /**
@@ -49,7 +50,7 @@ const RoomDesigner: React.FC = () => {
   const [bedSizeId, setBedSizeId] = useState<string>('single');
   const [showHeadboard, setShowHeadboard] = useState<boolean>(true);
   const [headboardSize, setHeadboardSize] = useState<number>(15);
-  const [headboardPosition, setHeadboardPosition] = useState<HeadboardPosition>('top');
+  const [headboardPosition, setHeadboardPosition] = useState<Orientation>('top');
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [dragPreviewPosition, setDragPreviewPosition] = useState<Position | null>(null);
   const [dragOffsetRef, setDragOffsetRef] = useState<{ x: number, y: number }>({ x: 0, y: 0 });
@@ -58,15 +59,43 @@ const RoomDesigner: React.FC = () => {
   const bedRef = useRef<HTMLDivElement>(null);
 
   // Use the rotation hook for managing rotation state and animation
-  const { isRotating, animationRotation, rotateBed } = useRotation({
-    bedSize,
-    bedPosition,
+  const { isRotating, animationRotation, rotateFurniture } = useRotation({
+    furnitureSize: bedSize,
+    furniturePosition: bedPosition,
     roomDimensions,
-    showHeadboard,
-    headboardSize,
+    hasHead: showHeadboard, // Map showHeadboard to hasHead,
+    headSize: headboardSize,
     onPositionChange: setBedPosition,
-    onHeadboardPositionChange: setHeadboardPosition
+    onOrientationChange: setHeadboardPosition,
   });
+
+  const createFurnitureObject = (
+    type: FurnitureType,
+    orientation: Orientation,
+    rotate: (direction: 'clockwise' | 'counterclockwise', orientation: Orientation) => void
+  ) => ({
+    type,
+    orientation,
+    rotate,
+  });
+
+  const bedObject = createFurnitureObject(FurnitureType.Bed, headboardPosition, rotateFurniture);
+
+  const wardrobeObject = createFurnitureObject(FurnitureType.Wardrobe, headboardPosition, (direction, position) => {
+    // Add wardrobe-specific rotation logic here
+  });
+
+  const tableObject = createFurnitureObject(FurnitureType.Table, headboardPosition, (direction, position) => {
+    // Add table-specific rotation logic here
+  });
+
+  const handleRotateClockwise = (e: React.MouseEvent, furnitureObject: typeof bedObject) => {
+    handleRotate(e, 'clockwise', furnitureObject);
+  };
+
+  const handleRotateCounterClockwise = (e: React.MouseEvent, furnitureObject: typeof bedObject) => {
+    handleRotate(e, 'counterclockwise', furnitureObject);
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -87,7 +116,7 @@ const RoomDesigner: React.FC = () => {
   const handleBedSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const sizeId = e.target.value;
     setBedSizeId(sizeId);
-    
+
     try {
       const bedSizeData = getBedSizeById(sizeId);
       setBedSize(bedSizeData.dimensions);
@@ -101,7 +130,6 @@ const RoomDesigner: React.FC = () => {
     if (!roomPreview) return null;
 
     const roomRect = roomPreview.getBoundingClientRect();
-
     const positionPixelX = clientX - roomRect.left - offsetX;
     const positionPixelY = clientY - roomRect.top - offsetY;
 
@@ -111,10 +139,10 @@ const RoomDesigner: React.FC = () => {
     const positionCmX = positionPixelX * scaleX;
     const positionCmY = positionPixelY * scaleY;
 
-    const isVertical = isVerticalOrientation(headboardPosition);
+    const isVertical = OrientationHelper.isVerticalOrientation(headboardPosition);
     const actualWidth = isVertical ? bedSize.width : bedSize.length;
     const actualLength = isVertical ? bedSize.length : bedSize.width;
-    const headboardAtStart = isHeadboardAtStart(headboardPosition);
+    const headboardAtStart = OrientationHelper.isOrientationAtStart(headboardPosition);
     const totalLength = showHeadboard && headboardAtStart ? actualLength + headboardSize : actualLength;
 
     const clampedX = Math.max(0, Math.min(positionCmX, roomDimensions.width - actualWidth));
@@ -258,40 +286,69 @@ const RoomDesigner: React.FC = () => {
     };
   }, [isDragging, touchStartPos, isRotating, calculatePosition, dragOffsetRef]);
 
-  const handleRotateClockwise = (e: React.MouseEvent) => {
+  const handleRotate = (
+    e: React.MouseEvent,
+    direction: 'clockwise' | 'counterclockwise',
+    furnitureObject: {
+      type: string;
+      orientation: Orientation;
+      rotate: (direction: 'clockwise' | 'counterclockwise', orientation: Orientation) => void;
+    }
+  ) => {
     e.stopPropagation();
-    rotateBed('clockwise', headboardPosition);
+    furnitureObject.rotate(direction, furnitureObject.orientation);
   };
 
-  const handleRotateCounterClockwise = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    rotateBed('counterclockwise', headboardPosition);
-  };
+  const getFurnitureContainerStyle = (furnitureObject: {
+    size: Dimensions;
+    position: Position;
+    orientation: Orientation;
+    isDragging: boolean;
+    isRotating: boolean;
+    animationRotation: number;
+    hasHead: boolean; // Indicates if the furniture has a "head" object (e.g., bedhead)
+    headSize?: number; // Size of the "head" object
+    showHead?: boolean; // Whether the "head" object is visible
+  }) => {
+    const {
+      size,
+      position,
+      orientation,
+      isDragging,
+      isRotating,
+      animationRotation,
+      hasHead,
+      headSize = 0,
+      showHead = false,
+    } = furnitureObject;
 
-  const getBedContainerStyle = () => {
-    const isVertical = isVerticalOrientation(headboardPosition);
-    const width = isVertical ? bedSize.width : bedSize.length;
-    const length = isVertical ? bedSize.length : bedSize.width;
-
-    const headboardAtEnd = headboardPosition === 'bottom' || headboardPosition === 'right';
-    const headboardAtStart = isHeadboardAtStart(headboardPosition);
+    const isVertical = OrientationHelper.isVerticalOrientation(orientation);
+    const width = isVertical ? size.width : size.length;
+    const length = isVertical ? size.length : size.width;
 
     let totalLength = length;
-    if (showHeadboard) {
-      if (headboardAtStart || headboardAtEnd) {
-        totalLength += headboardSize;
+
+    // Adjust the total length if the furniture has a "head" object and it's visible
+    if (hasHead && showHead) {
+      const headAtStart = OrientationHelper.isOrientationAtStart(orientation);
+      const headAtEnd = orientation === 'bottom' || orientation === 'right';
+
+      if (headAtStart || headAtEnd) {
+        totalLength += headSize;
       }
     }
 
-    // The transform property is only applied during rotation animation
-    // When not rotating, no transform is needed as we're using logical positioning
-    const transform = isRotating ? `rotate(${animationRotation - headboardPositionToAngle(headboardPosition)}deg)` : '';
+    // Calculate the rotation transform
+    const transform = isRotating
+      ? `rotate(${animationRotation - OrientationHelper.orientationToAngle(orientation)}deg)`
+      : '';
 
+    // Return the calculated styles
     return {
       width: `${(width / roomDimensions.width) * 100}%`,
       height: `${(totalLength / roomDimensions.length) * 100}%`,
-      top: `${(bedPosition.top / roomDimensions.length) * 100}%`,
-      left: `${(bedPosition.left / roomDimensions.width) * 100}%`,
+      top: `${(position.top / roomDimensions.length) * 100}%`,
+      left: `${(position.left / roomDimensions.width) * 100}%`,
       position: 'absolute' as const,
       transform,
       transformOrigin: 'center center', // Ensure rotation happens around the center
@@ -304,12 +361,12 @@ const RoomDesigner: React.FC = () => {
   const getDragPreviewStyle = () => {
     if (!dragPreviewPosition) return { display: 'none' };
 
-    const isVertical = isVerticalOrientation(headboardPosition);
+    const isVertical = OrientationHelper.isVerticalOrientation(headboardPosition);
     const width = isVertical ? bedSize.width : bedSize.length;
     const length = isVertical ? bedSize.length : bedSize.width;
 
     const headboardAtEnd = headboardPosition === 'bottom' || headboardPosition === 'right';
-    const headboardAtStart = isHeadboardAtStart(headboardPosition);
+    const headboardAtStart = OrientationHelper.isOrientationAtStart(headboardPosition);
 
     let totalLength = length;
     if (showHeadboard) {
@@ -318,7 +375,7 @@ const RoomDesigner: React.FC = () => {
       }
     }
 
-    const transform = isRotating ? `rotate(${animationRotation - headboardPositionToAngle(headboardPosition)}deg)` : '';
+    const transform = isRotating ? `rotate(${animationRotation - OrientationHelper.orientationToAngle(headboardPosition)}deg)` : '';
 
     return {
       width: `${(width / roomDimensions.width) * 100}%`,
@@ -339,11 +396,11 @@ const RoomDesigner: React.FC = () => {
   };
 
   useEffect(() => {
-    const isVertical = isVerticalOrientation(headboardPosition);
+    const isVertical = OrientationHelper.isVerticalOrientation(headboardPosition);
     const actualWidth = isVertical ? bedSize.width : bedSize.length;
     const actualLength = isVertical ? bedSize.length : bedSize.width;
 
-    const headboardAtStart = isHeadboardAtStart(headboardPosition);
+    const headboardAtStart = OrientationHelper.isOrientationAtStart(headboardPosition);
     const totalLength = showHeadboard && headboardAtStart ? actualLength + headboardSize : actualLength;
 
     setBedPosition(prev => ({
@@ -351,6 +408,18 @@ const RoomDesigner: React.FC = () => {
       top: Math.min(prev.top, Math.max(0, roomDimensions.length - totalLength))
     }));
   }, [bedSize, roomDimensions, headboardPosition, showHeadboard, headboardSize]);
+
+  const bedStyle = getFurnitureContainerStyle({
+    size: bedSize,
+    position: bedPosition,
+    orientation: headboardPosition,
+    isDragging,
+    isRotating,
+    animationRotation,
+    hasHead: true, // Bed has a bedhead
+    headSize: headboardSize,
+    showHead: showHeadboard,
+  });
 
   return (
     <div className="room-designer">
@@ -460,17 +529,17 @@ const RoomDesigner: React.FC = () => {
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
               onTouchCancel={handleTouchEnd}
-              style={getBedContainerStyle()}
+              style={bedStyle}
             >
-              <BedComponent 
+              <BedComponent
                 bedSizeId={bedSizeId}
                 headboardPosition={headboardPosition}
                 isRotating={isRotating}
                 animationRotation={animationRotation}
                 showHeadboard={showHeadboard}
                 headboardSize={headboardSize}
-                onRotateClockwise={handleRotateClockwise}
-                onRotateCounterClockwise={handleRotateCounterClockwise}
+                onRotateClockwise={(e) => handleRotateClockwise(e, bedObject)}
+                onRotateCounterClockwise={(e) => handleRotateCounterClockwise(e, bedObject)}
               />
             </div>
             <div className="room-dimensions">
